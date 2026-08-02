@@ -1,0 +1,9 @@
+{
+  "name": "chollogas-case-study",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test scripts/validate-case-study.test.mjs",
+    "validate": "node scripts/validate-case-study.mjs"
+  }
+}

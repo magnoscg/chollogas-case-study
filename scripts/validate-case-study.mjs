@@ -1,10 +1,29 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
+import { lstat, readFile, readdir } from 'node:fs/promises';
+import { dirname, extname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_ROOT = resolve(SCRIPT_DIR, '..');
+
+const WORKFLOW_PATH = '.github/workflows/case-study-check.yml';
+const IGNORED_TREE_DIRECTORIES = Object.freeze(new Set([
+  '.git',
+  'coverage',
+  'node_modules',
+]));
+const ALLOWED_WORKFLOW_ACTIONS = Object.freeze({
+  'actions/checkout': '3d3c42e5aac5ba805825da76410c181273ba90b1',
+  'actions/setup-node': '820762786026740c76f36085b0efc47a31fe5020',
+});
+const REQUIRED_WORKFLOW_COMMANDS = Object.freeze([
+  'npm test',
+  'npm run validate',
+]);
+const EXPECTED_PACKAGE_SCRIPTS = Object.freeze({
+  test: 'node --test scripts/validate-case-study.test.mjs',
+  validate: 'node scripts/validate-case-study.mjs',
+});
 
 const DOCUMENTS = Object.freeze({
   'README.md': {
@@ -216,10 +235,240 @@ function secretFinding(text) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
+function isPublicTextPath(path) {
+  return path.endsWith('.gitignore')
+    || ['.json', '.md', '.mjs', '.txt', '.yaml', '.yml'].includes(extname(path));
+}
+
+function workflowCodeLines(workflow) {
+  return workflow
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+#.*$/, '').replace(/\s+$/, ''));
+}
+
+function indentation(line) {
+  return line.match(/^\s*/)[0].length;
+}
+
+function topLevelBlockLines(lines, header) {
+  const start = lines.findIndex((line) => line === header);
+  if (start === -1) {
+    return [];
+  }
+
+  let end = start + 1;
+  while (end < lines.length) {
+    const line = lines[end];
+    if (line.trim() !== '' && indentation(line) === 0) {
+      break;
+    }
+    end += 1;
+  }
+  return lines.slice(start + 1, end);
+}
+
+function nestedBlockLines(lines, exactLine) {
+  const start = lines.findIndex((line) => line === exactLine);
+  if (start === -1) {
+    return [];
+  }
+
+  const blockIndent = indentation(lines[start]);
+  let end = start + 1;
+  while (end < lines.length) {
+    const line = lines[end];
+    if (line.trim() !== '' && indentation(line) <= blockIndent) {
+      break;
+    }
+    end += 1;
+  }
+  return lines.slice(start + 1, end);
+}
+
+function actionStepLines(lines, actionReference) {
+  const actionIndex = lines.findIndex(
+    (line) => line.trim() === `uses: ${actionReference}`,
+  );
+  if (actionIndex === -1) {
+    return [];
+  }
+
+  const stepIndent = Math.max(0, indentation(lines[actionIndex]) - 2);
+  let end = actionIndex + 1;
+  while (end < lines.length) {
+    const line = lines[end];
+    if (line.trim() !== '' && indentation(line) <= stepIndent) {
+      break;
+    }
+    end += 1;
+  }
+  return lines.slice(actionIndex, end);
+}
+
+function hasReadOnlyTopLevelPermissions(lines) {
+  const permissionHeaders = lines.filter((line) => line.trim() === 'permissions:');
+  if (permissionHeaders.length !== 1) {
+    return false;
+  }
+
+  const entries = topLevelBlockLines(lines, 'permissions:')
+    .filter((line) => line.trim() !== '')
+    .map((line) => line.trim());
+  return entries.length === 1 && entries[0] === 'contents: read';
+}
+
+function branchNames(blockLines) {
+  return blockLines.flatMap((line) => {
+    const match = line.trim().match(/^-\s+["']?([^"']+?)["']?$/);
+    return match ? [match[1]] : [];
+  });
+}
+
+function sameMembers(actual, expected) {
+  return actual.length === expected.length
+    && [...actual].sort().every((value, index) => value === [...expected].sort()[index]);
+}
+
+function validateWorkflowEvents(lines, errors) {
+  const onBlock = topLevelBlockLines(lines, 'on:');
+  const events = onBlock.flatMap((line) => {
+    if (indentation(line) !== 2) {
+      return [];
+    }
+    const match = line.match(/^\s{2}([A-Za-z_][A-Za-z0-9_-]*):\s*$/);
+    return match ? [match[1]] : [];
+  });
+  if (!sameMembers(events, ['push', 'pull_request'])) {
+    errors.add(`${WORKFLOW_PATH}: events must be exactly push and pull_request`);
+  }
+
+  const pushBranches = branchNames(nestedBlockLines(lines, '  push:'));
+  if (!sameMembers(pushBranches, ['main', 'develop', 'feature/**'])) {
+    errors.add(`${WORKFLOW_PATH}: push branches must be main, develop and feature/**`);
+  }
+
+  const pullRequestBranches = branchNames(nestedBlockLines(lines, '  pull_request:'));
+  if (!sameMembers(pullRequestBranches, ['main', 'develop'])) {
+    errors.add(`${WORKFLOW_PATH}: pull_request branches must be main and develop`);
+  }
+}
+
+function validateWorkflowText(workflow, errors) {
+  const lines = workflowCodeLines(workflow);
+  validateWorkflowEvents(lines, errors);
+
+  if (lines.some((line) => /^\s*pull_request_target\s*:/.test(line))) {
+    errors.add(`${WORKFLOW_PATH}: pull_request_target is not allowed`);
+  }
+  if (!hasReadOnlyTopLevelPermissions(lines)) {
+    errors.add(`${WORKFLOW_PATH}: top-level permissions must be exactly contents: read`);
+  }
+  if (lines.some((line) => (
+    /^\s*permissions\s*:\s*write-all\s*$/.test(line)
+    || /^\s*[A-Za-z][A-Za-z0-9-]*\s*:\s*write\s*$/.test(line)
+  ))) {
+    errors.add(`${WORKFLOW_PATH}: write permissions are not allowed`);
+  }
+
+  const actionReferences = lines.flatMap((line) => {
+    const match = line.match(/^\s*uses:\s*([^\s]+)\s*$/);
+    return match ? [match[1]] : [];
+  });
+  for (const reference of actionReferences) {
+    const match = reference.match(/^([^@\s]+)@([0-9a-f]{40})$/);
+    if (!match) {
+      errors.add(`${WORKFLOW_PATH}: action ${reference} must use a full 40-character commit SHA`);
+      continue;
+    }
+    const [, action, sha] = match;
+    if (ALLOWED_WORKFLOW_ACTIONS[action] !== sha) {
+      errors.add(`${WORKFLOW_PATH}: action ${reference} is not allowlisted`);
+    }
+  }
+
+  for (const [action, sha] of Object.entries(ALLOWED_WORKFLOW_ACTIONS)) {
+    const expectedReference = `${action}@${sha}`;
+    const occurrences = actionReferences.filter((reference) => reference === expectedReference).length;
+    if (occurrences !== 1) {
+      errors.add(`${WORKFLOW_PATH}: expected exactly one use of ${expectedReference}`);
+    }
+  }
+
+  const checkoutReference = `actions/checkout@${ALLOWED_WORKFLOW_ACTIONS['actions/checkout']}`;
+  const checkoutStep = actionStepLines(lines, checkoutReference);
+  if (!checkoutStep.some((line) => line.trim() === 'persist-credentials: false')) {
+    errors.add(`${WORKFLOW_PATH}: checkout must set persist-credentials: false`);
+  }
+
+  const setupNodeReference = `actions/setup-node@${ALLOWED_WORKFLOW_ACTIONS['actions/setup-node']}`;
+  const setupNodeStep = actionStepLines(lines, setupNodeReference);
+  if (!setupNodeStep.some((line) => line.trim() === 'node-version: 24')) {
+    errors.add(`${WORKFLOW_PATH}: setup-node must select Node.js 24`);
+  }
+
+  const runCommands = lines.flatMap((line) => {
+    const match = line.match(/^\s*run:\s*(.+?)\s*$/);
+    return match ? [match[1]] : [];
+  });
+  for (const command of REQUIRED_WORKFLOW_COMMANDS) {
+    if (runCommands.filter((candidate) => candidate === command).length !== 1) {
+      errors.add(`${WORKFLOW_PATH}: expected exactly one run command for ${command}`);
+    }
+  }
+}
+
+async function validatePublicTree(root, errors, relativeDirectory = '') {
+  let entries;
+  try {
+    entries = await readdir(join(root, relativeDirectory), { withFileTypes: true });
+  } catch {
+    errors.add(`${relativeDirectory || '.'}: public tree is unreadable`);
+    return;
+  }
+
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (entry.isDirectory() && IGNORED_TREE_DIRECTORIES.has(entry.name)) {
+      continue;
+    }
+
+    const relativePath = relativeDirectory === ''
+      ? entry.name
+      : join(relativeDirectory, entry.name);
+    let entryStat;
+    try {
+      entryStat = await lstat(join(root, relativePath));
+    } catch {
+      errors.add(`${relativePath}: unreadable public-tree entry`);
+      continue;
+    }
+
+    if (entryStat.isSymbolicLink()) {
+      errors.add(`${relativePath}: symbolic links are not allowed in the public tree`);
+    } else if (entryStat.isDirectory()) {
+      await validatePublicTree(root, errors, relativePath);
+    } else if (!entryStat.isFile()) {
+      errors.add(`${relativePath}: public-tree entries must be regular files or directories`);
+    } else if ((entryStat.mode & 0o111) !== 0) {
+      errors.add(`${relativePath}: public files must not be executable`);
+    } else if (isPublicTextPath(relativePath)) {
+      try {
+        const text = await readFile(join(root, relativePath), 'utf8');
+        if (secretFinding(text)) {
+          errors.add(`${relativePath}: contains a secret-like value`);
+        }
+      } catch {
+        errors.add(`${relativePath}: public text file is unreadable`);
+      }
+    }
+  }
+}
+
 export async function validateCaseStudy(root = DEFAULT_ROOT) {
   const caseStudyRoot = resolve(root);
   const errors = new Set();
   const referencedAssets = new Set();
+
+  await validatePublicTree(caseStudyRoot, errors);
 
   for (const [documentPath, requirements] of Object.entries(DOCUMENTS)) {
     let markdown;
@@ -367,20 +616,57 @@ export async function validateCaseStudy(root = DEFAULT_ROOT) {
   }
 
   try {
-    const workflowPath = join(caseStudyRoot, '.github/workflows/case-study-check.yml');
-    const workflowStat = await lstat(workflowPath);
-    if (workflowStat.isSymbolicLink() || !workflowStat.isFile()) {
-      errors.add('case-study-check.yml: must be a regular file, not a symbolic link');
-    } else {
-      const workflow = await readFile(workflowPath, 'utf8');
-      if (!workflow.includes('permissions:\n  contents: read')
-        || !workflow.includes('actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1')
-        || !workflow.includes('persist-credentials: false')) {
-        errors.add('case-study-check.yml: checkout must be pinned and run with read-only permissions');
-      }
+    const security = await readFile(join(caseStudyRoot, 'SECURITY.md'), 'utf8');
+    if (!security.includes('please do not open a public issue')
+      || !security.includes('mailto:soporte@ogamlabs.com')
+      || !security.includes('does not contain the CholloGas application, backend, credentials')) {
+      errors.add('SECURITY.md: must preserve private, repository-scoped reporting');
+    }
+    if (/(?:file:\/\/|\/Users\/|\/home\/|[A-Za-z]:\\)/i.test(security)
+      || secretFinding(security)) {
+      errors.add('SECURITY.md: contains a local path or secret-like value');
     }
   } catch {
-    errors.add('case-study-check.yml: missing or unreadable');
+    errors.add('SECURITY.md: missing or unreadable');
+  }
+
+  try {
+    const packageText = await readFile(join(caseStudyRoot, 'package.json'), 'utf8');
+    const packageDefinition = JSON.parse(packageText);
+    if (packageDefinition.private !== true || packageDefinition.type !== 'module') {
+      errors.add('package.json: must remain private and use ES modules');
+    }
+    const scripts = packageDefinition.scripts ?? {};
+    if (!sameMembers(Object.keys(scripts), Object.keys(EXPECTED_PACKAGE_SCRIPTS))
+      || Object.entries(EXPECTED_PACKAGE_SCRIPTS).some(
+        ([name, command]) => scripts[name] !== command,
+      )) {
+      errors.add('package.json: validation scripts must match the reviewed commands exactly');
+    }
+    const dependencySections = [
+      packageDefinition.dependencies,
+      packageDefinition.devDependencies,
+      packageDefinition.optionalDependencies,
+      packageDefinition.peerDependencies,
+    ].filter(Boolean);
+    if (dependencySections.some((dependencies) => Object.keys(dependencies).length > 0)) {
+      errors.add('package.json: this validator must remain dependency-free');
+    }
+  } catch {
+    errors.add('package.json: missing, unreadable or invalid JSON');
+  }
+
+  try {
+    const workflowPath = join(caseStudyRoot, WORKFLOW_PATH);
+    const workflowStat = await lstat(workflowPath);
+    if (workflowStat.isSymbolicLink() || !workflowStat.isFile()) {
+      errors.add(`${WORKFLOW_PATH}: must be a regular file, not a symbolic link`);
+    } else {
+      const workflow = await readFile(workflowPath, 'utf8');
+      validateWorkflowText(workflow, errors);
+    }
+  } catch {
+    errors.add(`${WORKFLOW_PATH}: missing or unreadable`);
   }
 
   return {

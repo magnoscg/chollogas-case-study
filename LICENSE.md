@@ -23,7 +23,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-The case-study prose in `README.md` and `README.es.md`, the CholloGas name and
-identity, and every file under `assets/` are not covered by the MIT License.
-They are copyright © 2026 Óscar Cantón / OgamLabs. All rights reserved; no reuse
-or redistribution is granted without prior written permission.
+The original case-study prose in `README.md` and `README.es.md`, the CholloGas
+name and first-party identity, and the original product interface and
+composition visible under `assets/` are not covered by the MIT License. They
+are copyright © 2026 Óscar Cantón / OgamLabs. All rights reserved to the extent
+those rights are held; no reuse or redistribution is granted without prior
+written permission.
+
+Third-party trademarks, station marks, map imagery and labels, and
+official-data content visible in product captures remain the property of their
+respective owners. This repository claims no ownership of those elements and
+grants no licence on their behalf.

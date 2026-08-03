@@ -22,6 +22,10 @@ the system shape, the decisions, the trade-offs and real product captures.
 
 [Open the uncropped 1200×630 product overview](assets/product-overview.png)
 
+_The hero combines an authentic Spanish-language product capture with the
+current Spain-and-France scope. Product pixels were not translated,
+reconstructed or regenerated._
+
 | Production scope | Value |
 | --- | ---: |
 | Countries | **2 — Spain and France** |
@@ -30,7 +34,8 @@ the system shape, the decisions, the trade-offs and real product captures.
 | Production price refresh | **Every 6 hours** |
 | App Store locales | **5** |
 
-_Coverage snapshot checked on 3 August 2026: 11,489 records in the
+_Coverage snapshot retrieved on 3 August 2026 at 09:13 CEST:
+11,492 records in the
 [Spanish MITECO catalog](https://datos.gob.es/es/catalogo/e05068001-instalaciones-de-suministro-de-combustibles-a-vehiculos-con-venta-publica)
 and 9,803 open-sale points in the
 [French government dataset](https://data.economie.gouv.fr/explore/dataset/prix-des-carburants-en-france-flux-instantane-v2/).
@@ -58,8 +63,9 @@ open `Prix des carburants` feed. That solves provenance, but not the product.
 The providers disagree on identifiers, geography, optional fields, timestamps
 and fuel catalogs. Spain is organized around provinces and thirteen source fuel
 types; France uses departments and six. Before product-side validation, their
-public feeds exposed 21,292 station records in the 3 August 2026 snapshot. A
-useful cross-border mobile product still has to answer different questions:
+public feeds exposed 21,295 station records in the 3 August 2026, 09:13 CEST
+snapshot. A useful cross-border mobile product still has to answer different
+questions:
 
 - Which stations are cheap **for this fuel and this vehicle**?
 - Is a price genuinely cheap, or only lower than the station next door?
@@ -171,19 +177,26 @@ route flow searches for viable stops and explains the result in product terms
 — distance, time, refuelling stop and remaining range — rather than exposing an
 opaque score.
 
-<p align="center">
-  <img src="assets/route-stop.webp" alt="Real CholloGas route with one recommended refuelling stop" width="360">
-</p>
+The decision is intentionally progressive: quantify the vehicle's usable range,
+make any deficit explicit, then recommend a viable stop and explain why it is a
+good balance of price, detour and safety.
+
+| 1. Capture actual range | 2. Explain the deficit | 3. Confirm a viable stop |
+| --- | --- | --- |
+| ![Real CholloGas fuel-range input](assets/route-range.webp) | ![Real CholloGas route deficit and recommendation](assets/route-deficit.webp) | ![Real CholloGas route with one recommended refuelling stop](assets/route-stop.webp) |
 
 ### 4.4 Privacy changes the architecture
 
-CholloGas has no login. Location is used on-device for nearby stations, route
-planning and optional local alerts. Analytics does not receive exact location,
-full station addresses or personal identifiers.
+CholloGas has no login and no advertising or cross-app tracking. Nearby
+searches send coordinates to the product API because geospatial filtering runs
+server-side; the request is unauthenticated. Exact coordinates, full addresses,
+station IDs and personal identifiers are not included in TelemetryDeck events,
+which are limited to product actions and coarse context such as province, fuel
+type and active-filter count.
 
-The current alert model is also local: iOS background refresh, significant
-location changes, `CLMonitor` candidates and local notifications. The backend
-does not need to know who the driver is or continuously track where they move.
+Optional alerts remain local: iOS background refresh, significant location
+changes, `CLMonitor` candidates and local notifications. There is no identity
+account or continuous movement feed sent to the backend.
 
 StoreKit follows the same product principle. Pro is a one-time purchase, not a
 mandatory subscription.
@@ -253,6 +266,10 @@ private product work.
 
 CholloGas is a product of **OgamLabs**. This repository contains a case study
 and product imagery only; it is not an open-source edition of the application.
+
+<p>
+  <img src="assets/ogamlabs-signature.svg" alt="OgamLabs" width="164">
+</p>
 
 [Content and code licence](LICENSE.md) · [Security reporting](SECURITY.md)
 

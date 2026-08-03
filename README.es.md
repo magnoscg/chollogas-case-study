@@ -24,6 +24,10 @@ reales del producto.
 
 [Abrir la vista general original de 1200×630](assets/product-overview.png)
 
+_La portada combina una captura auténtica del producto en español con el alcance
+actual en España y Francia. Los píxeles de la interfaz no se han traducido,
+reconstruido ni regenerado._
+
 | Alcance en producción | Valor |
 | --- | ---: |
 | Países | **2 — España y Francia** |
@@ -32,8 +36,8 @@ reales del producto.
 | Actualización de precios | **Cada 6 horas** |
 | Idiomas en la App Store | **5** |
 
-_Snapshot de cobertura comprobado el 3 de agosto de 2026: 11.489 registros en
-el [catálogo español de MITECO](https://datos.gob.es/es/catalogo/e05068001-instalaciones-de-suministro-de-combustibles-a-vehiculos-con-venta-publica)
+_Instantánea de cobertura obtenida el 3 de agosto de 2026 a las 09:13 CEST:
+11.492 registros en el [catálogo español de MITECO](https://datos.gob.es/es/catalogo/e05068001-instalaciones-de-suministro-de-combustibles-a-vehiculos-con-venta-publica)
 y 9.803 puntos de venta abiertos en el
 [dataset del Gobierno francés](https://data.economie.gouv.fr/explore/dataset/prix-des-carburants-en-france-flux-instantane-v2/).
 Estas cantidades de origen cambian y no son métricas de uso._
@@ -62,9 +66,9 @@ construye un producto.
 Los proveedores no coinciden en identificadores, geografía, campos opcionales,
 timestamps ni catálogos de carburantes. España se organiza por provincias y
 trece tipos de origen; Francia, por departamentos y seis. Antes de la validación
-del producto, sus feeds públicos sumaban 21.292 registros de estación en el
-snapshot del 3 de agosto de 2026. Una app transfronteriza útil todavía debe
-responder preguntas distintas:
+del producto, sus feeds públicos sumaban 21.295 registros de estación en la
+instantánea del 3 de agosto de 2026 a las 09:13 CEST. Una app transfronteriza
+útil todavía debe responder preguntas distintas:
 
 - ¿Qué estaciones son baratas **para este combustible y este vehículo**?
 - ¿El precio es realmente barato o solo menor que el de la estación de al lado?
@@ -177,21 +181,28 @@ usuario. El flujo busca paradas viables y explica el resultado en términos de
 producto —distancia, tiempo, parada de repostaje y autonomía restante— en lugar
 de enseñar una puntuación opaca.
 
-<p align="center">
-  <img src="assets/route-stop.webp" alt="Ruta real de CholloGas con una parada de repostaje recomendada" width="360">
-</p>
+La decisión avanza de forma deliberada: cuantifica la autonomía útil del
+vehículo, hace explícito cualquier déficit y después recomienda una parada
+viable explicando su equilibrio entre precio, desvío y seguridad.
+
+| 1. Introducir la autonomía real | 2. Explicar el déficit | 3. Confirmar una parada viable |
+| --- | --- | --- |
+| ![Entrada real de autonomía en CholloGas](assets/route-range.webp) | ![Déficit de ruta y recomendación reales de CholloGas](assets/route-deficit.webp) | ![Ruta real de CholloGas con una parada de repostaje recomendada](assets/route-stop.webp) |
 
 ### 4.4 La privacidad cambia la arquitectura
 
-CholloGas no tiene login. La ubicación se utiliza en el dispositivo para
-estaciones cercanas, rutas y alertas locales opcionales. Analytics no recibe la
-ubicación exacta, direcciones completas de estaciones ni identificadores
-personales.
+CholloGas no tiene login ni rastreo publicitario o entre apps. Las búsquedas
+cercanas envían coordenadas a la API del producto porque el filtrado geográfico
+se ejecuta en el servidor; la petición no está autenticada. Los eventos de
+TelemetryDeck no incluyen coordenadas exactas, direcciones completas,
+identificadores de estación ni identificadores personales: se limitan a acciones
+de producto y contexto aproximado como provincia, carburante y número de filtros
+activos.
 
-El modelo actual de alertas también es local: refresco en segundo plano de iOS,
-cambios significativos de ubicación, candidatos `CLMonitor` y notificaciones
-locales. El backend no necesita saber quién conduce ni seguir continuamente por
-dónde se mueve.
+Las alertas opcionales siguen siendo locales: refresco en segundo plano de iOS,
+cambios significativos de ubicación, candidatos de `CLMonitor` y notificaciones
+locales. No existe una cuenta de identidad ni se envía al backend un flujo
+continuo de movimiento.
 
 StoreKit sigue el mismo principio de producto. Pro es una compra única, no una
 suscripción obligatoria.
@@ -264,6 +275,10 @@ trabajo privado.
 CholloGas es un producto de **OgamLabs**. Este repositorio contiene únicamente
 un caso de estudio e imágenes del producto; no es una edición open source de la
 aplicación.
+
+<p>
+  <img src="assets/ogamlabs-signature.svg" alt="OgamLabs" width="164">
+</p>
 
 [Licencia de contenido y código](LICENSE.md) · [Avisos de seguridad](SECURITY.md)
 

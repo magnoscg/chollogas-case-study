@@ -130,7 +130,7 @@ const ASSET_REQUIREMENTS = Object.freeze({
   'assets/ogamlabs-signature.svg': {
     width: 1024,
     height: 320,
-    sha256: '564f0fedc9cb597c3d5dfcd7bc712b016e383097dd68d9857b3b3aeefb207753',
+    sha256: '7e3f7eb423c9d5a4add06ec6eff00b32fe60ee9f697151b824cd7f83b1b6ce7a',
   },
   'assets/price-history.webp': {
     width: 736,

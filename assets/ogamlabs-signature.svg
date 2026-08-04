@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="320" viewBox="0 0 1024 320" role="img" aria-labelledby="title desc">
-  <title id="title">OgamLabs horizontal logo — full color for light backgrounds</title>
-  <desc id="desc">Selected OgamLabs monogram paired with the outlined OgamLabs wordmark.</desc>
+  <title id="title">OgamLabs horizontal logo on a white presentation panel</title>
+  <desc id="desc">Selected OgamLabs monogram and outlined wordmark on a white panel that remains legible in dark interfaces.</desc>
+  <rect width="1024" height="320" rx="32" fill="#FFFFFF"/>
   <g transform="translate(32 32) scale(.5)">
     <path fill="#050505" fill-rule="evenodd" d="M120 48 H280 V144 C280 174.928 305.072 200 336 200 H424 C446.091 200 464 217.909 464 240 V392 C464 431.765 431.765 464 392 464 H120 C80.235 464 48 431.765 48 392 V120 C48 80.235 80.235 48 120 48 Z M164 144 H224 V288 C224 294.627 229.373 300 236 300 H340 V364 H164 C139.699 364 120 344.301 120 320 V188 C120 163.699 139.699 144 164 144 Z"/>
     <path fill="#0A84FF" d="M320 48 H360 C417.438 48 464 94.562 464 152 V176 H384 C348.654 176 320 147.346 320 112 Z"/>

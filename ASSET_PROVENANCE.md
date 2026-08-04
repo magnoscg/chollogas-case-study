@@ -46,15 +46,19 @@ locked below by dimensions and SHA-256 digest.
 ## `assets/ogamlabs-signature.svg`
 
 - **Origin:** exact first-party export from OgamLabs brand kit `1.0.0`, variant
-  `logo_ogamlabs_horizontal_full-color_light_20260803.svg`. The geometry,
-  colors, title and outlined wordmark are unchanged.
+  `logo_ogamlabs_horizontal_full-color_light_20260803.svg`. The logo geometry,
+  colors and outlined wordmark are unchanged.
+- **Presentation adaptation:** a white `#FFFFFF` panel with the brand kit's
+  reviewed `32 px` corner radius is embedded behind the original artwork so
+  the light-background variant remains legible in GitHub dark mode. Only the
+  accessible title and description were adjusted to describe that panel.
 - **Purpose:** quiet studio signature in the bilingual repository footer and
   source artwork for the two raster covers.
 - **Intrinsic dimensions:** 1024×320 pixels with a matching `viewBox`.
 - **Brand boundary:** CholloGas remains the primary product identity. The mark
   is used on a light neutral background at a legible size with its required
   clear space; it is not recolored, stretched or combined into a new mark.
-- **SHA-256:** `564f0fedc9cb597c3d5dfcd7bc712b016e383097dd68d9857b3b3aeefb207753`.
+- **SHA-256:** `7e3f7eb423c9d5a4add06ec6eff00b32fe60ee9f697151b824cd7f83b1b6ce7a`.
 
 ## `assets/price-history.webp`
 

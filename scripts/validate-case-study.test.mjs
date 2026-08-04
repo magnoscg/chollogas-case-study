@@ -28,9 +28,12 @@ const TEXT_FILES = [
 ];
 const ASSET_FILES = [
   'product-overview.png',
+  'ogamlabs-signature.svg',
   'price-history.webp',
   'station-list.webp',
   'price-map.webp',
+  'route-deficit.webp',
+  'route-range.webp',
   'route-stop.webp',
   'social-preview.png',
 ];
@@ -64,7 +67,75 @@ test('the current bilingual case study satisfies its public-proof invariants', a
   const result = await validateCaseStudy(PROJECT_ROOT);
   assert.deepEqual(result.errors, []);
   assert.equal(result.documents, 2);
-  assert.equal(result.referencedAssets.length, 6);
+  assert.equal(result.referencedAssets.length, 9);
+});
+
+test('the current Spanish capture keeps its cross-border scope explanation', async (t) => {
+  const fixture = await makeFixture(t);
+  await replaceFixtureText(
+    fixture,
+    'README.md',
+    'The hero combines an authentic Spanish-language product capture with the',
+    'The hero shows CholloGas.',
+  );
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => (
+    error.includes('README.md')
+    && error.includes('missing public-proof statement')
+    && error.includes('Spanish-language product capture')
+  )));
+});
+
+test('the Spanish document keeps the current cross-border scope explanation', async (t) => {
+  const fixture = await makeFixture(t);
+  await replaceFixtureText(
+    fixture,
+    'README.es.md',
+    'La portada combina una captura auténtica del producto en español con el alcance',
+    'La portada muestra CholloGas.',
+  );
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => (
+    error.includes('README.es.md')
+    && error.includes('missing public-proof statement')
+    && error.includes('captura auténtica')
+  )));
+});
+
+test('the route visuals remain an explained three-step product decision', async (t) => {
+  const fixture = await makeFixture(t);
+  await replaceFixtureText(
+    fixture,
+    'README.md',
+    'The decision is intentionally progressive: quantify the vehicle\'s usable range,',
+    'The app recommends a stop.',
+  );
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => (
+    error.includes('README.md')
+    && error.includes('missing public-proof statement')
+    && error.includes('intentionally progressive')
+  )));
+});
+
+test('the privacy section must disclose server-side coordinates and telemetry limits', async (t) => {
+  const fixture = await makeFixture(t);
+  await replaceFixtureText(
+    fixture,
+    'README.md',
+    'server-side; the request is unauthenticated.',
+    'entirely on-device.',
+  );
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => (
+    error.includes('README.md')
+    && error.includes('missing public-proof statement')
+    && error.includes('request is unauthenticated')
+  )));
 });
 
 test('missing social previews fail validation', async (t) => {
@@ -107,6 +178,36 @@ test('missing product captures fail validation', async (t) => {
   assert(result.errors.some((error) => error.includes('price-map.webp')));
 });
 
+test('missing route-decision captures fail validation', async (t) => {
+  const fixture = await makeFixture(t);
+  await unlink(join(fixture, 'assets', 'route-range.webp'));
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => error.includes('route-range.webp')));
+});
+
+test('the reviewed OgamLabs signature is required', async (t) => {
+  const fixture = await makeFixture(t);
+  await unlink(join(fixture, 'assets', 'ogamlabs-signature.svg'));
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => error.includes('ogamlabs-signature.svg')));
+});
+
+test('SVG assets reject active or external content', async (t) => {
+  const fixture = await makeFixture(t);
+  await writeFile(
+    join(fixture, 'assets', 'ogamlabs-signature.svg'),
+    '<svg width="1024" height="320" viewBox="0 0 1024 320"><script>alert(1)</script></svg>',
+  );
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => (
+    error.includes('ogamlabs-signature.svg')
+    && error.includes('active or external content')
+  )));
+});
+
 test('corrupt image containers fail validation', async (t) => {
   const fixture = await makeFixture(t);
   await writeFile(join(fixture, 'assets', 'route-stop.webp'), 'not a webp');
@@ -138,6 +239,19 @@ test('externally hosted images are rejected', async (t) => {
   assert(result.errors.some((error) => error.includes('externally hosted images')));
 });
 
+test('unreviewed raw HTML behavior is rejected', async (t) => {
+  const fixture = await makeFixture(t);
+  const path = join(fixture, 'README.md');
+  const markdown = await readFile(path, 'utf8');
+  await writeFile(
+    path,
+    `${markdown}\n<img src="assets/social-preview.png" onerror="alert(1)">\n`,
+  );
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => error.includes('unreviewed embedded HTML')));
+});
+
 test('the unsafe portfolio link stays out until its publication gate is cleared', async (t) => {
   const fixture = await makeFixture(t);
   const path = join(fixture, 'README.md');
@@ -164,6 +278,20 @@ test('secret-like values are rejected', async (t) => {
   const markdown = await readFile(path, 'utf8');
   const secretLikeValue = ['sk', '1234567890abcdef1234567890abcdef'].join('-');
   await writeFile(path, `${markdown}\n${secretLikeValue}\n`);
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => error.includes('secret-like value')));
+});
+
+test('database URLs with credentials are rejected', async (t) => {
+  const fixture = await makeFixture(t);
+  const path = join(fixture, 'README.md');
+  const markdown = await readFile(path, 'utf8');
+  const credential = [
+    'postgres',
+    '://case-study:do-not-publish@db.internal/chollogas',
+  ].join('');
+  await writeFile(path, `${markdown}\n${credential}\n`);
 
   const result = await validateCaseStudy(fixture);
   assert(result.errors.some((error) => error.includes('secret-like value')));
@@ -209,6 +337,19 @@ test('the licence must keep code and product content separate', async (t) => {
   assert(result.errors.some((error) => error.includes('split between MIT code')));
 });
 
+test('the licence cannot claim ownership of third-party visual elements', async (t) => {
+  const fixture = await makeFixture(t);
+  await replaceFixtureText(
+    fixture,
+    'LICENSE.md',
+    'claims no ownership',
+    'claims ownership',
+  );
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => error.includes('split between MIT code')));
+});
+
 test('asset provenance cannot turn the authentic capture into generated UI', async (t) => {
   const fixture = await makeFixture(t);
   const path = join(fixture, 'ASSET_PROVENANCE.md');
@@ -217,6 +358,19 @@ test('asset provenance cannot turn the authentic capture into generated UI', asy
     'No AI-generated product pixels',
     'AI-generated product pixels',
   ));
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => error.includes('authenticity')));
+});
+
+test('asset provenance cannot imply that the app has zero analytics', async (t) => {
+  const fixture = await makeFixture(t);
+  await replaceFixtureText(
+    fixture,
+    'ASSET_PROVENANCE.md',
+    'It is not a claim of zero analytics',
+    'It means zero analytics',
+  );
 
   const result = await validateCaseStudy(fixture);
   assert(result.errors.some((error) => error.includes('authenticity')));
@@ -259,6 +413,28 @@ test('secret-like values are rejected from unexpected public text files', async 
   const result = await validateCaseStudy(fixture);
   assert(result.errors.some((error) => (
     error.includes('notes.txt') && error.includes('secret-like value')
+  )));
+});
+
+test('unexpected files are rejected even when they contain no secret', async (t) => {
+  const fixture = await makeFixture(t);
+  await writeFile(join(fixture, 'internal-runbook.md'), 'No secrets here.\n');
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => (
+    error.includes('internal-runbook.md') && error.includes('outside the public allowlist')
+  )));
+});
+
+test('ignored tool directories are only allowed at the repository root', async (t) => {
+  const fixture = await makeFixture(t);
+  const nestedDirectory = join(fixture, 'assets', 'node_modules');
+  await mkdir(nestedDirectory);
+  await writeFile(join(nestedDirectory, 'private-notes.md'), 'Not public.\n');
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => (
+    error.includes('assets/node_modules') && error.includes('outside the public allowlist')
   )));
 });
 

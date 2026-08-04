@@ -12,6 +12,33 @@ const IGNORED_TREE_DIRECTORIES = Object.freeze(new Set([
   'coverage',
   'node_modules',
 ]));
+const ALLOWED_PUBLIC_DIRECTORIES = Object.freeze(new Set([
+  '.github',
+  '.github/workflows',
+  'assets',
+  'scripts',
+]));
+const ALLOWED_PUBLIC_FILES = Object.freeze(new Set([
+  '.gitignore',
+  '.github/workflows/case-study-check.yml',
+  'ASSET_PROVENANCE.md',
+  'LICENSE.md',
+  'README.es.md',
+  'README.md',
+  'SECURITY.md',
+  'assets/ogamlabs-signature.svg',
+  'assets/price-history.webp',
+  'assets/price-map.webp',
+  'assets/product-overview.png',
+  'assets/route-deficit.webp',
+  'assets/route-range.webp',
+  'assets/route-stop.webp',
+  'assets/social-preview.png',
+  'assets/station-list.webp',
+  'package.json',
+  'scripts/validate-case-study.mjs',
+  'scripts/validate-case-study.test.mjs',
+]));
 const ALLOWED_WORKFLOW_ACTIONS = Object.freeze({
   'actions/checkout': '3d3c42e5aac5ba805825da76410c181273ba90b1',
   'actions/setup-node': '820762786026740c76f36085b0efc47a31fe5020',
@@ -43,6 +70,12 @@ const DOCUMENTS = Object.freeze({
       '| App Store locales | **5** |',
       'It is **not the production architecture**.',
       'not downloads or revenue',
+      'The hero combines an authentic Spanish-language product capture with the',
+      'The decision is intentionally progressive: quantify the vehicle\'s usable range,',
+      '11,492 records in the',
+      '21,295 station records',
+      'server-side; the request is unauthenticated.',
+      'station IDs and personal identifiers are not included in TelemetryDeck events,',
     ],
   },
   'README.es.md': {
@@ -62,6 +95,12 @@ const DOCUMENTS = Object.freeze({
       '| Idiomas en la App Store | **5** |',
       '**No es la arquitectura de producción.**',
       'descargas ni ingresos',
+      'La portada combina una captura auténtica del producto en español con el alcance',
+      'La decisión avanza de forma deliberada: cuantifica la autonomía útil del',
+      '11.492 registros en',
+      '21.295 registros de estación',
+      'se ejecuta en el servidor; la petición no está autenticada.',
+      'identificadores de estación ni identificadores personales: se limitan a acciones',
     ],
   },
 });
@@ -86,7 +125,12 @@ const ASSET_REQUIREMENTS = Object.freeze({
   'assets/product-overview.png': {
     width: 1200,
     height: 630,
-    sha256: 'bba1137c60bcb093a5c010e78cd07e561498ff9e1aac617350f5c02595e21066',
+    sha256: '3e9b14ba4d8135f5cbff7d29f6fd74e868768bc70bcacca98db8a8dc8d66a840',
+  },
+  'assets/ogamlabs-signature.svg': {
+    width: 1024,
+    height: 320,
+    sha256: '564f0fedc9cb597c3d5dfcd7bc712b016e383097dd68d9857b3b3aeefb207753',
   },
   'assets/price-history.webp': {
     width: 736,
@@ -108,10 +152,20 @@ const ASSET_REQUIREMENTS = Object.freeze({
     height: 1600,
     sha256: '18309d95517b76d96019b49ce4abe6ec5d834bb0ae70fedb6a8e9cda436ab1a4',
   },
+  'assets/route-range.webp': {
+    width: 736,
+    height: 1600,
+    sha256: '3b999eba4c88176aa54005df584161b039befb42f42ec4fc3d9e134472a77150',
+  },
+  'assets/route-deficit.webp': {
+    width: 736,
+    height: 1600,
+    sha256: 'b412274bd34d494bb4b3fe7b3f4b50673effa9f32f3bea5411948bf06a3df207',
+  },
   'assets/social-preview.png': {
     width: 1280,
     height: 640,
-    sha256: 'fb541e1d0cf7c2835b2512cf073306b9fc79efe57185ccdb33e33c9c99ba63be',
+    sha256: 'd175169f0df5e1cb9b6605f1f114af27594c41beb4751152c26e35f11deeb4d0',
   },
 });
 
@@ -206,6 +260,38 @@ function webpDimensions(data) {
   return null;
 }
 
+function svgDimensions(data) {
+  const svg = data.toString('utf8');
+  const openingTag = svg.match(/<svg\b[^>]*>/i)?.[0];
+  if (!openingTag) {
+    return null;
+  }
+
+  const width = openingTag.match(/\bwidth=["']([0-9]+(?:\.[0-9]+)?)(?:px)?["']/i)?.[1];
+  const height = openingTag.match(/\bheight=["']([0-9]+(?:\.[0-9]+)?)(?:px)?["']/i)?.[1];
+  const viewBox = openingTag.match(/\bviewBox=["']([^"']+)["']/i)?.[1]
+    ?.trim()
+    .split(/\s+/)
+    .map(Number);
+  if (!width || !height || viewBox?.length !== 4 || viewBox.some(Number.isNaN)) {
+    return null;
+  }
+
+  const dimensions = { width: Number(width), height: Number(height) };
+  if (viewBox[0] !== 0
+    || viewBox[1] !== 0
+    || viewBox[2] !== dimensions.width
+    || viewBox[3] !== dimensions.height) {
+    return null;
+  }
+  return dimensions;
+}
+
+function hasUnsafeSVGContent(data) {
+  const svg = data.toString('utf8');
+  return /<script\b|<foreignObject\b|<!ENTITY|\son[a-z]+\s*=|(?:href|xlink:href)\s*=|url\s*\(/i.test(svg);
+}
+
 async function validateLocalReference(root, documentPath, reference, errors) {
   const target = localTarget(root, documentPath, reference.target);
   if (!target || !isWithin(root, target)) {
@@ -231,13 +317,18 @@ function secretFinding(text) {
     /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
     /\bsk-[A-Za-z0-9]{16,}\b/,
     /\bAKIA[A-Z0-9]{16}\b/,
+    /\bAIza[0-9A-Za-z_-]{35}\b/,
+    /\bxox[baprs]-[0-9A-Za-z-]{20,}\b/,
+    /\b(?:postgres(?:ql)?|mysql):\/\/[^:\s/]+:[^@\s]+@/i,
+    /https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9/_-]{20,}/,
+    /\b(?:CF_API_TOKEN|CLOUDFLARE_API_TOKEN|DATABASE_URL|ADMIN_PASSWORD)\s*=\s*["']?[^"'\s<]{8,}/i,
   ];
   return patterns.some((pattern) => pattern.test(text));
 }
 
 function isPublicTextPath(path) {
   return path.endsWith('.gitignore')
-    || ['.json', '.md', '.mjs', '.txt', '.yaml', '.yml'].includes(extname(path));
+    || ['.json', '.md', '.mjs', '.svg', '.txt', '.yaml', '.yml'].includes(extname(path));
 }
 
 function workflowCodeLines(workflow) {
@@ -427,7 +518,9 @@ async function validatePublicTree(root, errors, relativeDirectory = '') {
   }
 
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    if (entry.isDirectory() && IGNORED_TREE_DIRECTORIES.has(entry.name)) {
+    if (relativeDirectory === ''
+      && entry.isDirectory()
+      && IGNORED_TREE_DIRECTORIES.has(entry.name)) {
       continue;
     }
 
@@ -445,19 +538,28 @@ async function validatePublicTree(root, errors, relativeDirectory = '') {
     if (entryStat.isSymbolicLink()) {
       errors.add(`${relativePath}: symbolic links are not allowed in the public tree`);
     } else if (entryStat.isDirectory()) {
+      if (!ALLOWED_PUBLIC_DIRECTORIES.has(relativePath)) {
+        errors.add(`${relativePath}: unexpected directory is outside the public allowlist`);
+        continue;
+      }
       await validatePublicTree(root, errors, relativePath);
     } else if (!entryStat.isFile()) {
       errors.add(`${relativePath}: public-tree entries must be regular files or directories`);
-    } else if ((entryStat.mode & 0o111) !== 0) {
-      errors.add(`${relativePath}: public files must not be executable`);
-    } else if (isPublicTextPath(relativePath)) {
-      try {
-        const text = await readFile(join(root, relativePath), 'utf8');
-        if (secretFinding(text)) {
-          errors.add(`${relativePath}: contains a secret-like value`);
+    } else {
+      if (!ALLOWED_PUBLIC_FILES.has(relativePath)) {
+        errors.add(`${relativePath}: unexpected file is outside the public allowlist`);
+      }
+      if ((entryStat.mode & 0o111) !== 0) {
+        errors.add(`${relativePath}: public files must not be executable`);
+      } else if (isPublicTextPath(relativePath)) {
+        try {
+          const text = await readFile(join(root, relativePath), 'utf8');
+          if (secretFinding(text)) {
+            errors.add(`${relativePath}: contains a secret-like value`);
+          }
+        } catch {
+          errors.add(`${relativePath}: public text file is unreadable`);
         }
-      } catch {
-        errors.add(`${relativePath}: public text file is unreadable`);
       }
     }
   }
@@ -501,8 +603,10 @@ export async function validateCaseStudy(root = DEFAULT_ROOT) {
     if (/\b(?:in the order of millions|en el orden de millones)\b/i.test(markdown)) {
       errors.add(`${documentPath}: contains an unsupported internal scale claim`);
     }
-    if (/<(?:script|iframe)\b/i.test(markdown)) {
-      errors.add(`${documentPath}: executable embedded HTML is not allowed`);
+    if (/<\/?(?!(?:p|img)\b)[a-z][a-z0-9-]*\b/i.test(markdown)
+      || /\son[a-z]+\s*=/i.test(markdown)
+      || /javascript\s*:/i.test(markdown)) {
+      errors.add(`${documentPath}: unreviewed embedded HTML is not allowed`);
     }
 
     const references = markdownReferences(markdown);
@@ -558,11 +662,22 @@ export async function validateCaseStudy(root = DEFAULT_ROOT) {
     }
 
     const expected = ASSET_REQUIREMENTS[assetPath];
-    const dimensions = assetPath.endsWith('.png')
-      ? pngDimensions(data)
-      : webpDimensions(data);
+    let dimensions;
+    let format;
+    if (assetPath.endsWith('.png')) {
+      dimensions = pngDimensions(data);
+      format = 'PNG';
+    } else if (assetPath.endsWith('.webp')) {
+      dimensions = webpDimensions(data);
+      format = 'WebP';
+    } else {
+      dimensions = svgDimensions(data);
+      format = 'SVG';
+      if (hasUnsafeSVGContent(data)) {
+        errors.add(`${assetPath}: SVG active or external content is not allowed`);
+      }
+    }
     if (!dimensions) {
-      const format = assetPath.endsWith('.png') ? 'PNG' : 'WebP';
       errors.add(`${assetPath}: expected a valid ${format}`);
     } else if (dimensions.width !== expected.width || dimensions.height !== expected.height) {
       errors.add(
@@ -587,17 +702,25 @@ export async function validateCaseStudy(root = DEFAULT_ROOT) {
     errors.add('LICENSE.md: missing or unreadable');
   }
   if (!licence.includes('validation scripts and GitHub Actions workflow')
-    || !licence.includes('All rights reserved')) {
+    || !licence.includes('All rights reserved')
+    || !licence.includes('Third-party trademarks')
+    || !licence.includes('claims no ownership')) {
     errors.add('LICENSE.md: must preserve the split between MIT code and protected content');
   }
 
   try {
     const provenance = await readFile(join(caseStudyRoot, 'ASSET_PROVENANCE.md'), 'utf8');
-    if (!provenance.includes('first-party product captures')
-      || !provenance.includes('No AI-generated product pixels')
-      || !provenance.includes('Spanish-language product snapshot')
-      || !provenance.includes('not a guarantee')
-      || !provenance.includes('current real-world price')) {
+    const normalizedProvenance = provenance.replace(/\s+/g, ' ');
+    if (!normalizedProvenance.includes('first-party product captures')
+      || !normalizedProvenance.includes('No AI-generated product pixels')
+      || !normalizedProvenance.includes('Spanish-language product snapshot')
+      || !normalizedProvenance.includes('no advertising or cross-app tracking')
+      || !normalizedProvenance.includes('not a claim of zero analytics')
+      || !normalizedProvenance.includes('exact first-party export')
+      || !normalizedProvenance.includes('not recolored, stretched')
+      || !normalizedProvenance.includes('claims no ownership')
+      || !normalizedProvenance.includes('not a guarantee')
+      || !normalizedProvenance.includes('current real-world price')) {
       errors.add('ASSET_PROVENANCE.md: must preserve authenticity, privacy and temporal limits');
     }
     for (const [assetPath, requirement] of Object.entries(ASSET_REQUIREMENTS)) {
@@ -619,6 +742,7 @@ export async function validateCaseStudy(root = DEFAULT_ROOT) {
     const security = await readFile(join(caseStudyRoot, 'SECURITY.md'), 'utf8');
     if (!security.includes('please do not open a public issue')
       || !security.includes('mailto:soporte@ogamlabs.com')
+      || !security.includes('Automated checks reject unexpected files')
       || !security.includes('does not contain the CholloGas application, backend, credentials')) {
       errors.add('SECURITY.md: must preserve private, repository-scoped reporting');
     }
@@ -687,7 +811,7 @@ async function main() {
   }
   console.log(
     `Validated ${result.documents} case-study documents and `
-    + `${result.referencedAssets.length} local product captures.`,
+    + `${result.referencedAssets.length} reviewed local visual assets.`,
   );
 }
 

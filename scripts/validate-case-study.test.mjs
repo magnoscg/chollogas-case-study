@@ -194,6 +194,24 @@ test('the reviewed OgamLabs signature is required', async (t) => {
   assert(result.errors.some((error) => error.includes('ogamlabs-signature.svg')));
 });
 
+test('the OgamLabs signature keeps its white dark-mode panel', async (t) => {
+  const fixture = await makeFixture(t);
+  const signaturePath = join(fixture, 'assets', 'ogamlabs-signature.svg');
+  const signature = await readFile(signaturePath, 'utf8');
+  const withoutPanel = signature.replace(
+    '  <rect width="1024" height="320" rx="32" fill="#FFFFFF"/>\n',
+    '',
+  );
+  assert.notEqual(withoutPanel, signature);
+  await writeFile(signaturePath, withoutPanel);
+
+  const result = await validateCaseStudy(fixture);
+  assert(result.errors.some((error) => (
+    error.includes('ogamlabs-signature.svg')
+    && error.includes('SHA-256')
+  )));
+});
+
 test('SVG assets reject active or external content', async (t) => {
   const fixture = await makeFixture(t);
   await writeFile(

@@ -19,6 +19,7 @@ const ALLOWED_PUBLIC_DIRECTORIES = Object.freeze(new Set([
   'scripts',
 ]));
 const ALLOWED_PUBLIC_FILES = Object.freeze(new Set([
+  '.gitattributes',
   '.gitignore',
   '.github/workflows/case-study-check.yml',
   'ASSET_PROVENANCE.md',

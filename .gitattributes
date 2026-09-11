@@ -1,0 +1,4 @@
+# This repository is a written case study. Its only JavaScript is the validator
+# that checks the document, so counting it as the repository's language labels
+# the study by its tooling instead of by the Swift 6 work it describes.
+scripts/*.mjs linguist-detectable=false
